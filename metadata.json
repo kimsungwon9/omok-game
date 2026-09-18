@@ -1,0 +1,6 @@
+{
+  "name": "오목 게임",
+  "description": "HTML, CSS, JavaScript로 구현된 15x15 오목 웹 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
