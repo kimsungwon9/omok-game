@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>오목 게임 (15x15 High Density)</title>
+  <style>
+    :root {
+      --bg-page: #f4f4f5;
+      --bg-panel: #ffffff;
+      --bg-board: #dcb35c;
+      --ink-primary: #18181b;
+      --ink-secondary: #71717a;
+      --accent: #c2410c;
+      --stone-black: #000000;
+      --stone-white: #ffffff;
+      --border: #e4e4e7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-page);
+      color: var(--ink-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .game-container {
+      background: var(--bg-panel);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 680px;
+      width: 100%;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+      width: 100%;
+      border-bottom: 2px solid var(--ink-primary);
+      padding-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--ink-primary);
+      letter-spacing: -0.5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .sub-title {
+      font-size: 13px;
+      color: var(--ink-secondary);
+      font-weight: 500;
+    }
+
+    /* Status Bar */
+    .status-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      padding: 12px 18px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+    }
+
+    .turn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .stone-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      position: relative;
+    }
+
+    .stone-icon.black {
+      background: radial-gradient(circle at 30% 30%, #444, #000);
+      border: 1px solid #000;
+    }
+
+    .stone-icon.white {
+      background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+      border: 1px solid #d4d4d8;
+    }
+
+    .status-text {
+      color: var(--ink-primary);
+    }
+
+    .status-text.winner {
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .move-count {
+      font-size: 13px;
+      font-family: monospace;
+      color: var(--ink-secondary);
+      font-weight: 600;
+    }
+
+    /* Omok Board */
+    .board-wrapper {
+      position: relative;
+      background: var(--bg-board);
+      padding: 18px;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      border: 2px solid #5d4037;
+      touch-action: none;
+    }
+
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(15, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      width: 480px;
+      height: 480px;
+      position: relative;
+      touch-action: none;
+    }
+
+    @media (max-width: 560px) {
+      .game-container {
+        padding: 8px;
+      }
+      .board-wrapper {
+        padding: 8px;
+        touch-action: none;
+      }
+      .board-grid {
+        width: min(calc(100vw - 44px), 370px);
+        height: min(calc(100vw - 44px), 370px);
+        touch-action: none;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      .btn {
+        min-height: 44px;
+      }
+    }
+
+    /* Grid Cell */
+    .cell {
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Grid Cross Lines through cell centers */
+    .cell::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(93, 64, 55, 0.75);
+      transform: translateY(-50%);
+      z-index: 1;
+    }
+
+    .cell::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(93, 64, 55, 0.75);
+      transform: translateX(-50%);
+      z-index: 1;
+    }
+
+    /* Trim edges so lines end at the board borders */
+    .cell.top-row::after { top: 50%; }
+    .cell.bottom-row::after { bottom: 50%; }
+    .cell.left-col::before { left: 50%; }
+    .cell.right-col::before { right: 50%; }
+
+    /* Star Points (화점) */
+    .star-point {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: #5d4037;
+      border-radius: 50%;
+      z-index: 2;
+    }
+
+    /* Hover Ghost Stone */
+    .cell:not(.has-stone):hover::marker {
+      display: none;
+    }
+
+    .cell.hover-black:not(.has-stone):hover .ghost-stone {
+      opacity: 0.35;
+      background: #000;
+    }
+
+    .cell.hover-white:not(.has-stone):hover .ghost-stone {
+      opacity: 0.4;
+      background: #fff;
+      border: 1px solid #d4d4d8;
+    }
+
+    /* Mobile touch targeting visual cue */
+    .cell.touch-active {
+      background: rgba(194, 65, 12, 0.15);
+    }
+
+    .cell.touch-active:not(.has-stone) .ghost-stone {
+      opacity: 0.75;
+      transform: scale(1.05);
+      border: 2px solid var(--accent);
+    }
+
+    .ghost-stone {
+      width: 82%;
+      height: 82%;
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 3;
+      transition: opacity 0.1s ease;
+    }
+
+    /* Placed Stones */
+    .stone {
+      position: absolute;
+      width: 86%;
+      height: 86%;
+      border-radius: 50%;
+      z-index: 4;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    .stone.black {
+      background: radial-gradient(circle at 30% 30%, #444, #000);
+      border: 1px solid #000;
+    }
+
+    .stone.white {
+      background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+      border: 1px solid #d4d4d8;
+    }
+
+    /* Last placed move red indicator dot */
+    .stone.last-move::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border: 1px solid #ffffff;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Winning 5 Stones Highlight Ring */
+    .stone.win-stone {
+      border: 3px solid var(--accent);
+      transform: scale(1.08);
+      z-index: 10;
+    }
+
+    /* Control Buttons */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    button {
+      font-family: inherit;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--ink-primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: #27272a;
+    }
+
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: #f1ede6;
+      color: #5c4d44;
+      border: 1px solid #d9d1c7;
+    }
+
+    .btn-secondary:hover {
+      background: #e6dfd5;
+    }
+
+    .rules-tip {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #8c7e75;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .mode-select-box {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      width: 100%;
+      background: var(--bg-page);
+      padding: 4px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      color: var(--ink-secondary);
+      transition: all 0.15s;
+    }
+
+    .mode-btn.active {
+      background: var(--ink-primary);
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-container" id="game-app">
+    <header>
+      <h1>오목 게임</h1>
+      <p class="sub-title">15 × 15 표준 바둑판 • 사람 vs AI 대전</p>
+    </header>
+
+    <div class="mode-select-box" id="mode-selector">
+      <button type="button" class="mode-btn active" id="btn-mode-ai">사람 vs AI</button>
+      <button type="button" class="mode-btn" id="btn-mode-pvp">2인 대전</button>
+    </div>
+
+    <div class="status-panel" id="status-panel">
+      <div class="turn-indicator" id="turn-indicator">
+        <span class="stone-icon black" id="current-stone-icon"></span>
+        <span class="status-text" id="status-text">현재 차례: 흑돌 (사람)</span>
+      </div>
+      <div class="move-count" id="move-count">총 0수</div>
+    </div>
+
+    <div class="board-wrapper">
+      <div class="board-grid" id="board-grid">
+        <!-- 15x15 = 225 cells generated dynamically -->
+      </div>
+    </div>
+
+    <div class="controls">
+      <button type="button" class="btn-primary" id="btn-restart">
+        다시 시작
+      </button>
+      <button type="button" class="btn-secondary" id="btn-undo">
+        한 수 무르기
+      </button>
+    </div>
+
+    <p class="rules-tip">
+      가로, 세로, 대각선 중 먼저 5개의 돌을 연속으로 놓는 쪽이 승리합니다.
+    </p>
+  </div>
+
+  <script>
+    (function() {
+      // 15x15 board constants
+      const SIZE = 15;
+      const STAR_POINTS = [
+        [3, 3], [3, 11], [7, 7], [11, 3], [11, 11]
+      ];
+
+      // Game state variables
+      let board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+      let gameMode = 'human-vs-ai'; // 'human-vs-ai' or 'human-vs-human'
+      let humanColor = 'BLACK';
+      let aiColor = 'WHITE';
+      let currentPlayer = 'BLACK'; // 'BLACK' or 'WHITE'
+      let isGameOver = false;
+      let isAiThinking = false;
+      let aiTimer = null;
+      let winner = null;
+      let winningLine = [];
+      let moveHistory = [];
+
+      // DOM Elements
+      const boardGrid = document.getElementById('board-grid');
+      const statusText = document.getElementById('status-text');
+      const currentStoneIcon = document.getElementById('current-stone-icon');
+      const moveCountText = document.getElementById('move-count');
+      const restartBtn = document.getElementById('btn-restart');
+      const undoBtn = document.getElementById('btn-undo');
+      const btnModeAi = document.getElementById('btn-mode-ai');
+      const btnModePvp = document.getElementById('btn-mode-pvp');
+
+      // Initialize Board Cells
+      function initBoardDOM() {
+        boardGrid.innerHTML = '';
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = 'cell-' + r + '-' + c;
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+
+            // Trim edge lines for realistic Go board border
+            if (r === 0) cell.classList.add('top-row');
+            if (r === SIZE - 1) cell.classList.add('bottom-row');
+            if (c === 0) cell.classList.add('left-col');
+            if (c === SIZE - 1) cell.classList.add('right-col');
+
+            // Star points (화점)
+            const isStar = STAR_POINTS.some(([sr, sc]) => sr === r && sc === c);
+            if (isStar) {
+              const dot = document.createElement('div');
+              dot.className = 'star-point';
+              cell.appendChild(dot);
+            }
+
+            // Ghost stone for hover indicator
+            const ghost = document.createElement('div');
+            ghost.className = 'ghost-stone';
+            cell.appendChild(ghost);
+
+            // Click listener
+            cell.addEventListener('click', (e) => {
+              if (Date.now() - lastTouchEndTime < 450) return;
+              handleCellClick(r, c);
+            });
+
+            boardGrid.appendChild(cell);
+          }
+        }
+        updateHoverClasses();
+      }
+
+      let lastTouchEndTime = 0;
+      let activeTouchCoord = null;
+
+      function getGridCoordFromTouch(e) {
+        if (!e.touches || e.touches.length === 0) return null;
+        const touch = e.touches[0];
+        const rect = boardGrid.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        if (x < -15 || x > rect.width + 15 || y < -15 || y > rect.height + 15) return null;
+        const clampedX = Math.max(0, Math.min(rect.width - 1, x));
+        const clampedY = Math.max(0, Math.min(rect.height - 1, y));
+        const col = Math.floor((clampedX / rect.width) * SIZE);
+        const row = Math.floor((clampedY / rect.height) * SIZE);
+        return { row, col };
+      }
+
+      boardGrid.addEventListener('touchstart', (e) => {
+        if (isGameOver || isAiThinking) return;
+        activeTouchCoord = getGridCoordFromTouch(e);
+        updateTouchIndicator();
+      }, { passive: true });
+
+      boardGrid.addEventListener('touchmove', (e) => {
+        if (isGameOver || isAiThinking) return;
+        activeTouchCoord = getGridCoordFromTouch(e);
+        updateTouchIndicator();
+      }, { passive: true });
+
+      boardGrid.addEventListener('touchend', (e) => {
+        lastTouchEndTime = Date.now();
+        if (activeTouchCoord && !isGameOver && !isAiThinking) {
+          const { row, col } = activeTouchCoord;
+          if (board[row][col] === null) {
+            handleCellClick(row, col);
+          }
+        }
+        activeTouchCoord = null;
+        updateTouchIndicator();
+      });
+
+      boardGrid.addEventListener('touchcancel', () => {
+        activeTouchCoord = null;
+        updateTouchIndicator();
+      });
+
+      function updateTouchIndicator() {
+        const cells = boardGrid.querySelectorAll('.cell');
+        cells.forEach(cell => {
+          const r = parseInt(cell.dataset.row, 10);
+          const c = parseInt(cell.dataset.col, 10);
+          if (activeTouchCoord && activeTouchCoord.row === r && activeTouchCoord.col === c) {
+            cell.classList.add('touch-active');
+          } else {
+            cell.classList.remove('touch-active');
+          }
+        });
+      }
+
+      function updateHoverClasses() {
+        const cells = boardGrid.querySelectorAll('.cell');
+        cells.forEach(cell => {
+          cell.classList.remove('hover-black', 'hover-white');
+          if (!isGameOver && !isAiThinking) {
+            cell.classList.add(currentPlayer === 'BLACK' ? 'hover-black' : 'hover-white');
+          }
+        });
+      }
+
+      // Handle Cell Click (Human action)
+      function handleCellClick(r, c) {
+        if (isGameOver || isAiThinking) return;
+        if (gameMode === 'human-vs-ai' && currentPlayer !== humanColor) return;
+        if (board[r][c] !== null) return;
+
+        console.log("현재 게임 모드:", gameMode);
+        console.log("현재 플레이어:", gameMode === 'human-vs-ai' ? "human" : currentPlayer.toLowerCase());
+        console.log("사람 돌 배치 완료");
+
+        board[r][c] = currentPlayer;
+        moveHistory.push({ row: r, col: c, player: currentPlayer });
+        renderStones();
+
+        const winResult = checkWin(r, c, currentPlayer);
+        if (winResult) {
+          isGameOver = true;
+          winner = currentPlayer;
+          winningLine = winResult;
+          renderStones();
+          showVictory();
+          return;
+        }
+
+        currentPlayer = (currentPlayer === 'BLACK') ? 'WHITE' : 'BLACK';
+        updateStatus();
+        updateHoverClasses();
+
+        if (gameMode === 'human-vs-ai' && currentPlayer === aiColor) {
+          triggerAIMove();
+        }
+      }
+
+      // AI Heuristic Decision Engine
+      function computeAIMove() {
+        const opponent = humanColor;
+        let emptyCells = [];
+        let hasStones = false;
+
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            if (board[r][c] !== null) {
+              hasStones = true;
+            } else {
+              emptyCells.push({ row: r, col: c });
+            }
+          }
+        }
+
+        if (!hasStones || emptyCells.length === 0) {
+          return { row: 7, col: 7 };
+        }
+
+        // Search near existing stones
+        const candidates = emptyCells.filter(pos => {
+          for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+              const nr = pos.row + dr;
+              const nc = pos.col + dc;
+              if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && board[nr][nc] !== null) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+
+        const list = candidates.length > 0 ? candidates : emptyCells;
+
+        // 1. Immediate win for AI
+        for (const pos of list) {
+          board[pos.row][pos.col] = aiColor;
+          const win = checkWin(pos.row, pos.col, aiColor);
+          board[pos.row][pos.col] = null;
+          if (win) return pos;
+        }
+
+        // 2. Immediate block for opponent win
+        for (const pos of list) {
+          board[pos.row][pos.col] = opponent;
+          const win = checkWin(pos.row, pos.col, opponent);
+          board[pos.row][pos.col] = null;
+          if (win) return pos;
+        }
+
+        // 3. Heuristic score
+        let bestScore = -Infinity;
+        let bestMoves = [];
+
+        function evalCell(row, col, player) {
+          let score = 0;
+          const dirs = [{ dr: 0, dc: 1 }, { dr: 1, dc: 0 }, { dr: 1, dc: 1 }, { dr: 1, dc: -1 }];
+          for (const d of dirs) {
+            let count = 1;
+            let open = 0;
+            let r = row + d.dr, c = col + d.dc;
+            while (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === player) {
+              count++; r += d.dr; c += d.dc;
+            }
+            if (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === null) open++;
+
+            r = row - d.dr; c = col - d.dc;
+            while (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === player) {
+              count++; r -= d.dr; c -= d.dc;
+            }
+            if (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === null) open++;
+
+            if (count >= 5) score += 100000;
+            else if (count === 4) score += open === 2 ? 10000 : 2500;
+            else if (count === 3) score += open === 2 ? 1500 : 200;
+            else if (count === 2) score += open === 2 ? 100 : 20;
+          }
+          return score;
+        }
+
+        for (const pos of list) {
+          const atk = evalCell(pos.row, pos.col, aiColor);
+          const def = evalCell(pos.row, pos.col, opponent);
+          const centerDist = Math.abs(pos.row - 7) + Math.abs(pos.col - 7);
+          const total = atk * 1.1 + def * 1.0 + Math.max(0, 14 - centerDist);
+
+          if (total > bestScore) {
+            bestScore = total;
+            bestMoves = [pos];
+          } else if (Math.abs(total - bestScore) < 0.001) {
+            bestMoves.push(pos);
+          }
+        }
+
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)] || { row: 7, col: 7 };
+      }
+
+      function triggerAIMove() {
+        console.log("AI 차례 시작");
+        console.log("AI 함수 호출");
+
+        isAiThinking = true;
+        statusText.textContent = "AI 생각 중...";
+        updateHoverClasses();
+
+        aiTimer = setTimeout(() => {
+          const aiMove = computeAIMove();
+          console.log("AI 선택 위치:", aiMove.row, aiMove.col);
+
+          board[aiMove.row][aiMove.col] = aiColor;
+          moveHistory.push({ row: aiMove.row, col: aiMove.col, player: aiColor });
+          renderStones();
+
+          const winResult = checkWin(aiMove.row, aiMove.col, aiColor);
+          if (winResult) {
+            isGameOver = true;
+            winner = aiColor;
+            winningLine = winResult;
+            renderStones();
+            showVictory();
+          } else {
+            currentPlayer = humanColor;
+            console.log("현재 플레이어: human");
+            updateStatus();
+          }
+
+          console.log("AI 돌 배치 완료");
+          isAiThinking = false;
+          updateHoverClasses();
+          aiTimer = null;
+        }, 500);
+      }
+
+      // Win checking algorithm in 4 directions
+      function checkWin(row, col, player) {
+        const directions = [
+          { dr: 0, dc: 1 },
+          { dr: 1, dc: 0 },
+          { dr: 1, dc: 1 },
+          { dr: 1, dc: -1 }
+        ];
+
+        for (const dir of directions) {
+          const line = [{ row, col }];
+
+          let r = row + dir.dr;
+          let c = col + dir.dc;
+          while (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === player) {
+            line.push({ row: r, col: c });
+            r += dir.dr;
+            c += dir.dc;
+          }
+
+          r = row - dir.dr;
+          c = col - dir.dc;
+          while (r >= 0 && r < SIZE && c >= 0 && c < SIZE && board[r][c] === player) {
+            line.push({ row: r, col: c });
+            r -= dir.dr;
+            c -= dir.dc;
+          }
+
+          if (line.length >= 5) {
+            return line;
+          }
+        }
+        return null;
+      }
+
+      // Render stones on the board
+      function renderStones() {
+        const lastMove = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
+
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const cell = document.getElementById('cell-' + r + '-' + c);
+            const stoneVal = board[r][c];
+
+            const existingStone = cell.querySelector('.stone');
+            if (existingStone) {
+              existingStone.remove();
+            }
+
+            if (stoneVal !== null) {
+              cell.classList.add('has-stone');
+              const stone = document.createElement('div');
+              stone.className = 'stone ' + (stoneVal === 'BLACK' ? 'black' : 'white');
+
+              if (lastMove && lastMove.row === r && lastMove.col === c && !isGameOver) {
+                stone.classList.add('last-move');
+              }
+
+              const isWinStone = winningLine.some(coord => coord.row === r && coord.col === c);
+              if (isWinStone) {
+                stone.classList.add('win-stone');
+              }
+
+              cell.appendChild(stone);
+            } else {
+              cell.classList.remove('has-stone');
+            }
+          }
+        }
+      }
+
+      // Update status indicators
+      function updateStatus() {
+        moveCountText.textContent = '총 ' + moveHistory.length + '수';
+
+        if (isGameOver) return;
+
+        if (gameMode === 'human-vs-ai') {
+          if (currentPlayer === humanColor) {
+            currentStoneIcon.className = 'stone-icon black';
+            statusText.textContent = '현재 차례: 사람 (흑돌)';
+          } else {
+            currentStoneIcon.className = 'stone-icon white';
+            statusText.textContent = isAiThinking ? 'AI 생각 중...' : '현재 차례: AI (백돌)';
+          }
+        } else {
+          if (currentPlayer === 'BLACK') {
+            currentStoneIcon.className = 'stone-icon black';
+            statusText.textContent = '현재 차례: 흑돌';
+          } else {
+            currentStoneIcon.className = 'stone-icon white';
+            statusText.textContent = '현재 차례: 백돌';
+          }
+        }
+        statusText.classList.remove('winner');
+      }
+
+      // Show victory
+      function showVictory() {
+        let winnerName = '';
+        if (gameMode === 'human-vs-ai') {
+          winnerName = (winner === humanColor) ? '사람(흑돌)' : '오목 AI(백돌)';
+        } else {
+          winnerName = (winner === 'BLACK') ? '흑돌' : '백돌';
+        }
+        statusText.textContent = winnerName + ' 승리!';
+        statusText.classList.add('winner');
+        currentStoneIcon.className = 'stone-icon ' + (winner === 'BLACK' ? 'black' : 'white');
+        updateHoverClasses();
+      }
+
+      // Restart game
+      function restartGame() {
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = null;
+        }
+        isAiThinking = false;
+        board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+        currentPlayer = 'BLACK';
+        isGameOver = false;
+        winner = null;
+        winningLine = [];
+        moveHistory = [];
+
+        renderStones();
+        updateStatus();
+        updateHoverClasses();
+      }
+
+      // Undo move
+      function undoMove() {
+        if (moveHistory.length === 0 || isGameOver || isAiThinking) return;
+
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = null;
+          isAiThinking = false;
+        }
+
+        if (gameMode === 'human-vs-ai') {
+          const steps = moveHistory.length >= 2 ? 2 : 1;
+          for (let i = 0; i < steps; i++) {
+            const last = moveHistory.pop();
+            if (last) board[last.row][last.col] = null;
+          }
+          currentPlayer = humanColor;
+        } else {
+          const last = moveHistory.pop();
+          if (last) {
+            board[last.row][last.col] = null;
+            currentPlayer = last.player;
+          }
+        }
+
+        renderStones();
+        updateStatus();
+        updateHoverClasses();
+      }
+
+      btnModeAi.addEventListener('click', () => {
+        gameMode = 'human-vs-ai';
+        btnModeAi.classList.add('active');
+        btnModePvp.classList.remove('active');
+        restartGame();
+      });
+
+      btnModePvp.addEventListener('click', () => {
+        gameMode = 'human-vs-human';
+        btnModePvp.classList.add('active');
+        btnModeAi.classList.remove('active');
+        restartGame();
+      });
+
+      // Event Listeners
+      restartBtn.addEventListener('click', restartGame);
+      undoBtn.addEventListener('click', undoMove);
+
+      // Start initialization
+      initBoardDOM();
+      updateStatus();
+    })();
+  </script>
+</body>
+</html>
